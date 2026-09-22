@@ -67,30 +67,37 @@ Instead of scaling memory cells horizontally with expensive extra ports, banking
 ```
 ## Top-Level Block Diagram — Banked Memory Interleaving Controller
 
+## Top-Level Block Diagram — Banked Memory Interleaving Controller
+
 ```
-                                   processor <-> controller bus
-               ┌────────────────────────────────────────────────────────────────────┐
-               │                                                                    │
-┌────────────────────────────┐   ┌───────────────────────────────┐   ┌────────────────────────────┐
-│                            │   │     BANKING / PHYS MEM HW     │   │                            │
-│                            │   │                               │   │                            │
-│                            │   │ ┌───────────────────────────┐ │   │                            │
-│      CONTROLLER CORE       │   │ │       BANK 0 (EVEN)       │ │   │                            │
-│                            │   │ │ b0_addr      [6:0]  <---- │ │   │    PROCESSOR / USER I/F    │
-│ Internal Registers:        │   │ │ b0_din       [15:0] <---- │ │   │                            │
-│ addr_reg     [7:0]         │   │ │ b0_we               <---- │ │   │ user_addr    [7:0]  ---->  │
-│ din_reg      [15:0]        │   │ │ b0_dout_in   [15:0] ----> │ │   │ user_req            ---->  │
-│ we_reg                     │◄─►│ └───────────────────────────┘ │   │ user_din     [15:0] ---->  │
-│ req_reg                    │   │                               │   │ user_we             ---->  │
-│ bank_sel (addr_reg[0])     │   │ ┌───────────────────────────┐ │   │                            │
-│ b0_dout_reg  [15:0]        │   │ │        BANK 1 (ODD)       │ │   │ bank0_dout   [15:0] <----  │
-│ b1_dout_reg  [15:0]        │   │ │ b1_addr      [6:0]  <---- │ │   │ bank1_dout   [15:0] <----  │
-│                            │   │ │ b1_din       [15:0] <---- │ │   │                            │
-│                            │   │ │ b1_we               <---- │ │   │                            │
-│                            │   │ │ b1_dout_in   [15:0] ----> │ │   │                            │
-│                            │   │ └───────────────────────────┘ │   │                            │
-└────────────────────────────┘   └───────────────────────────────┘   └────────────────────────────┘
+                                           processor <-> controller bus
+                     ┌────────────────────────────────────────────────────────────────────────┐
+                     │                                                                        │
+┌────────────────────────────────────────┐   ┌─────────────────────────────┐   ┌────────────────────────────┐
+│                                        │   │    BANKING / PHYS MEM HW    │   │                            │
+│                                        │   │                             │   │                            │
+│                                        │   │ ┌─────────────────────────┐ │   │                            │
+│            CONTROLLER CORE             │   │ │      BANK 0 (EVEN)      │ │   │                            │
+│                                        │ ► │ │ b0_addr      [6:0]  ◄── │ │   │    PROCESSOR / USER I/F    │
+│ Internal Registers:                    │ ► │ │ b0_din       [15:0] ◄── │ │   │                            │
+│ addr_reg     [7:0]  ───► (to banks)    │ ► │ │ b0_we               ◄── │ │   │ user_addr    [7:0]  ---->  │
+│ din_reg      [15:0] ───► (to banks)    │ ◄ │ │ b0_dout_in   [15:0] ──► │ │   │ user_req            ---->  │
+│ we_reg              ───► (to banks)    │   │ └─────────────────────────┘ │   │ user_din     [15:0] ---->  │
+│ req_reg             (gating, internal) │   │                             │   │ user_we             ---->  │
+│ bank_sel (addr_reg[0])                 │   │ ┌─────────────────────────┐ │   │                            │
+│ b0_dout_reg  [15:0] ◄─── (from bank0)  │   │ │       BANK 1 (ODD)      │ │   │ bank0_dout   [15:0] <----  │
+│ b1_dout_reg  [15:0] ◄─── (from bank1)  │ ► │ │ b1_addr      [6:0]  ◄── │ │   │ bank1_dout   [15:0] <----  │
+│                                        │ ► │ │ b1_din       [15:0] ◄── │ │   │                            │
+│                                        │ ► │ │ b1_we               ◄── │ │   │                            │
+│                                        │ ◄ │ │ b1_dout_in   [15:0] ──► │ │   │                            │
+│                                        │   │ └─────────────────────────┘ │   │                            │
+└────────────────────────────────────────┘   └─────────────────────────────┘   └────────────────────────────┘
 ```
+
+**Direction key:** an arrow shown next to a signal always points *out of* the block it's listed in if it reads `───►`, or *into* the block if it reads `◄───`.
+- **Controller → Banking (outputs):** `addr_reg`, `din_reg`, `we_reg` drive `b0_addr/b0_din/b0_we` and `b1_addr/b1_din/b1_we` — these are the address/data/write-enable signals going **into** each physical bank (`◄──` on the bank side).
+- **Banking → Controller (inputs):** `b0_dout_in`/`b1_dout_in` come back **out of** each bank (`──►` on the bank side) and are captured into `b0_dout_reg`/`b1_dout_reg`.
+- `req_reg` and `bank_sel` stay internal — they only gate/select which bank's `we` fires, they don't cross the boundary themselves.
 
 ### Port Summary
 
