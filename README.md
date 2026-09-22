@@ -29,41 +29,67 @@ Instead of scaling memory cells horizontally with expensive extra ports, banking
 
 ```
                          ┌───────────────────────────────────────────────────────────────┐
-                         │        BANKED MEMORY INTERLEAVING CONTROLLER (Top)             │
-                         │                                                                 │
-   clk    ───────────────►│                                                                │
-   rst_n  ───────────────►│  (async active-low reset)                                      │
-                         │                                                                 │
- ─────────── Processor / User Interface ───────────         Internal Registers            │
-                         │                                                                 │
-   user_addr[7:0] ───────►│──┐                          ┌─────────────────────────┐        │
-   user_req       ───────►│  ├─► addr_reg[7:0]  ────────►│ bank_sel = addr_reg[0]  │        │
-   user_din[15:0] ───────►│  ├─► din_reg[15:0]           │  (0 = Bank0 / Even)     │        │
-   user_we        ───────►│  ├─► we_reg                 │  (1 = Bank1 / Odd)      │        │
-                         │  └─► req_reg (req pipeline)  └─────────────────────────┘        │
-                         │                                                                 │
-                         │        ┌───────────────────────────────────────────┐            │
-                         │        │  b0_dout_reg[15:0]  ◄── captured from     │            │
-                         │        │                          b0_dout_in       │            │
-   bank0_dout[15:0]◄─────│────────┤                                            │            │
-                         │        │  b1_dout_reg[15:0]  ◄── captured from     │            │
-                         │        │                          b1_dout_in       │            │
-   bank1_dout[15:0]◄─────│────────┤                                            │            │
-                         │        └───────────────────────────────────────────┘            │
-                         │                                                                 │
- ────────── Physical Memory Hardware Interface (Bank 0 / Bank 1) ──────────                │
-                         │                                                                 │
-   b0_addr[6:0]   ◄──────│── addr_reg[7:1]   (= user_addr[7:1])                            │
-   b0_din[15:0]   ◄──────│── din_reg[15:0]                                                 │
-   b0_we          ◄──────│── we_reg & ~bank_sel  (write only if target = Bank0)            │
-   b0_dout_in[15:0]──────►│──► b0_dout_reg                                                 │
-                         │                                                                 │
-   b1_addr[6:0]   ◄──────│── addr_reg[7:1]   (= user_addr[7:1])                            │
-   b1_din[15:0]   ◄──────│── din_reg[15:0]                                                 │
-   b1_we          ◄──────│── we_reg & bank_sel   (write only if target = Bank1)            │
-   b1_dout_in[15:0]──────►│──► b1_dout_reg                                                 │
-                         │                                                                 │
+                         │        BANKED MEMORY INTERLEAVING CONTROLLER (Top)            │
+                         │                                                               │
+   clk    ───────────────►│                                                              │
+   rst_n  ───────────────►│  (async active-low reset)                                    │
+                         │                                                               │
+ ─────────── Processor / User Interface ───────────         Internal Registers           │
+                         │                                                               │
+  user_addr[7:0] ───────►│ ──┐                          ┌─────────────────────────┐      │
+   user_req       ───────►│  ├─► addr_reg[7:0]  ────────►│ bank_sel = addr_reg[0] │      │
+   user_din[15:0] ───────►│  ├─► din_reg[15:0]           │  (0 = Bank0 / Even)    │      │
+   user_we        ───────►│  ├─► we_reg                 │  (1 = Bank1 / Odd)      │      │
+                         │  └─► req_reg (req pipeline)  └─────────────────────────┘      │
+                         │                                                               │
+                         │        ┌───────────────────────────────────────────┐          │
+                         │        │  b0_dout_reg[15:0]  ◄── captured from     │          │
+                         │        │                          b0_dout_in       │          │
+   bank0_dout[15:0]◄─────│────────┤                                           │          │
+                         │        │  b1_dout_reg[15:0]  ◄── captured from     │          │
+                         │        │                          b1_dout_in       │          │
+   bank1_dout[15:0]◄─────│────────┤                                           │          │
+                         │        └───────────────────────────────────────────┘          │
+                         │                                                               │
+ ────────── Physical Memory Hardware Interface (Bank 0 / Bank 1) ──────────              │
+                         │                                                               │
+   b0_addr[6:0]   ◄──────│── addr_reg[7:1]   (= user_addr[7:1])                          │
+   b0_din[15:0]   ◄──────│── din_reg[15:0]                                               │
+   b0_we          ◄──────│── we_reg & ~bank_sel  (write only if target = Bank0)          │
+   b0_dout_in[15:0]──────►│──► b0_dout_reg                                               │
+                         │                                                               │
+   b1_addr[6:0]   ◄──────│── addr_reg[7:1]   (= user_addr[7:1])                          │
+   b1_din[15:0]   ◄──────│── din_reg[15:0]                                               │
+   b1_we          ◄──────│── we_reg & bank_sel   (write only if target = Bank)           │
+   b1_dout_in[15:0]──────►│──► b1_dout_reg                                               │
+                         │                                                               │
                          └───────────────────────────────────────────────────────────────┘
+```
+## Top-Level Block Diagram — Banked Memory Interleaving Controller
+
+```
+                                   processor <-> controller bus
+               ┌────────────────────────────────────────────────────────────────────┐
+               │                                                                    │
+┌────────────────────────────┐   ┌───────────────────────────────┐   ┌────────────────────────────┐
+│                            │   │     BANKING / PHYS MEM HW     │   │                            │
+│                            │   │                               │   │                            │
+│                            │   │ ┌───────────────────────────┐ │   │                            │
+│      CONTROLLER CORE       │   │ │       BANK 0 (EVEN)       │ │   │                            │
+│                            │   │ │ b0_addr      [6:0]  <---- │ │   │    PROCESSOR / USER I/F    │
+│ Internal Registers:        │   │ │ b0_din       [15:0] <---- │ │   │                            │
+│ addr_reg     [7:0]         │   │ │ b0_we               <---- │ │   │ user_addr    [7:0]  ---->  │
+│ din_reg      [15:0]        │   │ │ b0_dout_in   [15:0] ----> │ │   │ user_req            ---->  │
+│ we_reg                     │◄─►│ └───────────────────────────┘ │   │ user_din     [15:0] ---->  │
+│ req_reg                    │   │                               │   │ user_we             ---->  │
+│ bank_sel (addr_reg[0])     │   │ ┌───────────────────────────┐ │   │                            │
+│ b0_dout_reg  [15:0]        │   │ │        BANK 1 (ODD)       │ │   │ bank0_dout   [15:0] <----  │
+│ b1_dout_reg  [15:0]        │   │ │ b1_addr      [6:0]  <---- │ │   │ bank1_dout   [15:0] <----  │
+│                            │   │ │ b1_din       [15:0] <---- │ │   │                            │
+│                            │   │ │ b1_we               <---- │ │   │                            │
+│                            │   │ │ b1_dout_in   [15:0] ----> │ │   │                            │
+│                            │   │ └───────────────────────────┘ │   │                            │
+└────────────────────────────┘   └───────────────────────────────┘   └────────────────────────────┘
 ```
 
 ### Port Summary
@@ -89,10 +115,10 @@ Instead of scaling memory cells horizontally with expensive extra ports, banking
 
 ### Internal Registers (proposed)
 
-| Register        | Width | Purpose                                             |
-|------------------|-------|------------------------------------------------------|
-| `addr_reg`       | 8     | Registered copy of `user_addr`                        |
-| `din_reg`        | 16    | Registered copy of `user_din`                          |
+| Register        | Width | Purpose                                                  |
+|------------------|-------|---------------------------------------------------------|
+| `addr_reg`       | 8     | Registered copy of `user_addr`                          |
+| `din_reg`        | 16    | Registered copy of `user_din`                           |
 | `we_reg`         | 1     | Registered copy of `user_we`                            |
 | `req_reg`        | 1     | Registered/pipelined `user_req`                         |
 | `bank_sel`       | 1     | `addr_reg[0]` — selects Bank0 (even) vs Bank1 (odd)     |
