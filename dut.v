@@ -3,14 +3,13 @@
 // Simple, unparameterized Verilog
 // ============================================================
 module bmic_dut (
-    input  wire        clk,
-    input  wire        rst_n,
+    input clk, rst_n,
 
     // Processor / User Interface
-    input  wire [7:0]  user_addr,
-    input  wire        user_req,
-    input  wire [15:0] user_din,
-    input  wire        user_we,
+    input [7:0]  user_addr,
+    input user_req,
+    input [15:0] user_din,
+    input user_we,
     output reg  [15:0] bank0_dout,
     output reg  [15:0] bank1_dout,
 
