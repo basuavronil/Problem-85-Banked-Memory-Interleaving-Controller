@@ -65,34 +65,49 @@ Instead of scaling memory cells horizontally with expensive extra ports, banking
                          │                                                               │
                          └───────────────────────────────────────────────────────────────┘
 ```
-## Top-Level Block Diagram — Banked Memory Interleaving Controller
+## Understanding the Interfaces
+This controller sits between two very different "worlds" and translates between them.
 
-## Top-Level Block Diagram — Banked Memory Interleaving Controller
+### 1. User Interface (Processor side)
 
-```
-                                           processor <-> controller bus
-                     ┌────────────────────────────────────────────────────────────────────────┐
-                     │                                                                        │
-┌────────────────────────────────────────┐   ┌─────────────────────────────┐   ┌────────────────────────────┐
-│                                        │   │    BANKING / PHYS MEM HW    │   │                            │
-│                                        │   │                             │   │                            │
-│                                        │   │ ┌─────────────────────────┐ │   │                            │
-│            CONTROLLER CORE             │   │ │      BANK 0 (EVEN)      │ │   │                            │
-│                                        │ ► │ │ b0_addr      [6:0]  ◄── │ │   │    PROCESSOR / USER I/F    │
-│ Internal Registers:                    │ ► │ │ b0_din       [15:0] ◄── │ │   │                            │
-│ addr_reg     [7:0]  ───► (to banks)    │ ► │ │ b0_we               ◄── │ │   │ user_addr    [7:0]  ---->  │
-│ din_reg      [15:0] ───► (to banks)    │ ◄ │ │ b0_dout_in   [15:0] ──► │ │   │ user_req            ---->  │
-│ we_reg              ───► (to banks)    │   │ └─────────────────────────┘ │   │ user_din     [15:0] ---->  │
-│ req_reg             (gating, internal) │   │                             │   │ user_we             ---->  │
-│ bank_sel (addr_reg[0])                 │   │ ┌─────────────────────────┐ │   │                            │
-│ b0_dout_reg  [15:0] ◄─── (from bank0)  │   │ │       BANK 1 (ODD)      │ │   │ bank0_dout   [15:0] <----  │
-│ b1_dout_reg  [15:0] ◄─── (from bank1)  │ ► │ │ b1_addr      [6:0]  ◄── │ │   │ bank1_dout   [15:0] <----  │
-│                                        │ ► │ │ b1_din       [15:0] ◄── │ │   │                            │
-│                                        │ ► │ │ b1_we               ◄── │ │   │                            │
-│                                        │ ◄ │ │ b1_dout_in   [15:0] ──► │ │   │                            │
-│                                        │   │ └─────────────────────────┘ │   │                            │
-└────────────────────────────────────────┘   └─────────────────────────────┘   └────────────────────────────┘
-```
+This is how the outside world — a CPU, another module, or a testbench — talks to your design. It's simple and doesn't know anything about banks or how memory is physically split up.
+
+| Signal        | What it means in plain words          |
+|----------------|----------------------------------------|
+| `user_addr`    | "Here's the address I want"            |
+| `user_req`     | "Go — process my request now"          |
+| `user_din`     | "Here's the data to write"             |
+| `user_we`      | "This is a write (1) or a read (0)"    |
+| `bank0_dout`   | "Give me back the data" (from Bank 0)  |
+| `bank1_dout`   | "Give me back the data" (from Bank 1)  |
+
+The processor just asks for an address and expects data back. It has no idea there are two separate physical memories underneath.
+
+### 2. Memory Interface (Physical Bank side)
+
+This is how you talk to the actual hardware — two separate, independent memory chips: Bank 0 and Bank 1. Each bank is "dumb" — it only understands its own local signals and has no idea the other bank even exists.
+
+| Signal               | What it means in plain words                 |
+|----------------------|-----------------------------------------------|
+| `b0_addr` / `b1_addr`| "Here's your local address" (7 bits — no bank-select bit needed) |
+| `b0_din` / `b1_din`  | "Here's the data to write"                    |
+| `b0_we` / `b1_we`    | "Write now"                                    |
+| `b0_dout_in` / `b1_dout_in` | "Here's what I read"                     |
+
+### 3. So what does the Controller (middle block) actually do?
+
+It's the **translator** that sits between the simple user interface and the two physical banks. Its job:
+
+- **Splits the incoming address** into two parts:
+  - The **bank-select bit** (`user_addr[0]`) — decides even (Bank 0) or odd (Bank 1)
+  - The **local address** (`user_addr[7:1]`) — the actual row inside that bank
+- **Routes the request** to the correct physical bank — only Bank 0's `we` fires for even addresses, only Bank 1's for odd addresses
+- **Picks which bank's data to return** to the processor on a read
+- **Holds registers** (`addr_reg`, `din_reg`, `we_reg`, `bank_sel`, `b0_dout_reg`, `b1_dout_reg`) since real hardware needs a clock cycle to latch and remember what was requested
+
+### Why split memory into banks at all?
+
+By putting even addresses in one physical chip and odd addresses in another, both banks can potentially be accessed independently — which is the whole idea behind "interleaving." The Controller is the piece of logic that makes this split invisible to the processor, while still correctly driving two separate physical memories underneath.
 
 **Direction key:** an arrow shown next to a signal always points *out of* the block it's listed in if it reads `───►`, or *into* the block if it reads `◄───`.
 - **Controller → Banking (outputs):** `addr_reg`, `din_reg`, `we_reg` drive `b0_addr/b0_din/b0_we` and `b1_addr/b1_din/b1_we` — these are the address/data/write-enable signals going **into** each physical bank (`◄──` on the bank side).
