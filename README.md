@@ -100,3 +100,10 @@ Instead of scaling memory cells horizontally with expensive extra ports, banking
 | `b1_dout_reg`    | 16    | Captured read data from Bank 1                          |
 - `b1_we` *(Output, 1-bit)*: Write enable routed to Bank 1.
 - `b1_dout_in` *(Input, `16` bits)*: Data output read directly from physical Bank 1.
+
+# Output
+## Waveform 
+<img width="959" height="345" alt="image" src="https://github.com/user-attachments/assets/ec4afbe7-f10d-4342-859a-fdc717e6eca9" />
+
+## Simulation terminal 
+<img width="767" height="400" alt="image" src="https://github.com/user-attachments/assets/48b4049b-3a2f-4cbc-846d-16417916523e" />
